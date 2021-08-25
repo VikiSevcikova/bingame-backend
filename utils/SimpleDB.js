@@ -8,19 +8,19 @@ class SimpleDB{
     }
 
     Create(username, email, password){
-        // if(this.validateEmail(email)){
-        //     throw new Error("Invalid email!");
-        // }
-        // if(this.validatePassword(password)){
-        //     throw new Error("Password must have at least 6 digits. At least one lowercase. At least one uppercase. At least one special character from @ # $ % ^ & *");
-        // }
+        if(!this.validateEmail(email)){
+            throw new Error("Invalid email!");
+        }
+        if(!this.validatePassword(password)){
+            throw new Error("Password must have at least 3 digits. At least one lowercase. At least one uppercase");
+        }
 
         if(this.Read(email)) {
             throw new Error('User with email: ' + email +" already exists.");
         }; 
         console.log('create')
         let user = {loginUsername : username, loginEmail : email, loginPassword: password};
-        console.log(user)
+        console.log(this.inMemoryDatabase)
         this.inMemoryDatabase.push(user);
         return true;
     };
@@ -72,15 +72,16 @@ class SimpleDB{
 
 
     validateEmail(email){
-        // let pattern = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/
-        let pattern = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+        let pattern = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/
+        // let pattern = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
         let valid = email.match(pattern);
         console.log(email)
         return valid;
     }
 
     validatePassword(password){
-        let pattern = /(?=(.*[\d]){6,})(?=.*?[a-z]){1,}(?=(.*[A-Z]){1,})(?=(.*[@#$%^&*])){1,}/;
+        // let pattern = /(?=(.*[\d]){6,})(?=.*?[a-z]){1,}(?=(.*[A-Z]){1,})(?=(.*[@#$%^&*])){1,}/;
+        let pattern = /(?=(.*[\d]){3,})(?=.*?[a-z]){1,}(?=(.*[A-Z]){1,})/;
         let valid = password.match(pattern);
         return valid;
     }
