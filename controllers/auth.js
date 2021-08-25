@@ -1,9 +1,18 @@
 const jwt = require('jsonwebtoken');
 const basicAuth = require("express-basic-auth");
 const ErrorResponse = require("../utils/errorResponse");
+const db = require('../utils/SimpleDB');
 
 exports.register = async (req, res, next) => {
     console.log('register');
+    const {username, email, password} = req.body;
+    
+    try{
+        db.Create(username, email, password);
+        sendToken(user, 201, res);
+    }catch(error){
+        res.status(500).json({success: false, error: error.message});
+    }
 }
 
 exports.login = async (req, res, next) => {
@@ -11,7 +20,7 @@ exports.login = async (req, res, next) => {
     const {email, password} = req.body;
     console.log(req.body)
     if(!email || !password){
-        req.status(400).json({success: false, error: "Please provide email and password."});
+        res.status(400).json({success: false, error: "Please provide email and password."});
     }
 
     try{
@@ -25,7 +34,7 @@ exports.login = async (req, res, next) => {
         sendToken(email, 200, res);
 
     }catch(error){
-        req.status(500).json({success: false, error: error.message});
+        res.status(500).json({success: false, error: error.message});
     }
 }
 
