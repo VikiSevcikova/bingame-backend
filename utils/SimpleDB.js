@@ -56,6 +56,7 @@ class SimpleDB{
         }
     };
 
+    //get data from the DB file 
     reloadDB() {
         if(fs.existsSync(this.filename)){
             const data = fs.readFileSync(this.filename, 'utf8');
@@ -63,6 +64,7 @@ class SimpleDB{
         }
     }
     
+    //save data what is memory to the DB file
     flushDB() {
         fs.writeFile(this.filename, JSON.stringify(this.inMemoryDatabase) ,(err) => {
             if (err) throw err;
@@ -73,14 +75,13 @@ class SimpleDB{
 
     validateEmail(email){
         let pattern = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/
-        // let pattern = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
         let valid = email.match(pattern);
         console.log(email)
         return valid;
     }
 
     validatePassword(password){
-        // let pattern = /(?=(.*[\d]){6,})(?=.*?[a-z]){1,}(?=(.*[A-Z]){1,})(?=(.*[@#$%^&*])){1,}/;
+        //Password must have at least 3 digits. At least one lowercase. At least one uppercase
         let pattern = /(?=(.*[\d]){3,})(?=.*?[a-z]){1,}(?=(.*[A-Z]){1,})/;
         let valid = password.match(pattern);
         return valid;
