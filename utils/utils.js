@@ -1,7 +1,8 @@
+const crypto = require("crypto");
+
 exports.validateEmail = (email) => {
     let pattern = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/
     let valid = email.match(pattern);
-    console.log(email)
     return valid;
 }
 
@@ -13,4 +14,10 @@ exports.validatePassword = (password) => {
 
 exports.getRandomNumber = (max) => {
     return Math.floor(Math.random() * max);
+}
+
+exports.getResetPasswordToken = () => {
+    let resetToken = crypto.randomBytes(20).toString("hex");
+    //create hash object with sha256 algorithm, updates it with data in resetToken and return in hex form
+    return crypto.createHash("sha256").update(resetToken).digest("hex");
 }

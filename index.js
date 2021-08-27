@@ -16,13 +16,25 @@ app.use(cors());
 app.use("/auth", authRouter);
 app.use("/users", usersRoute);
 
-MongoClient.connect(process.env.MONGO_URI+"bingame", function(err, db) {
-  if (err) console.log("Database already exists.")
-  console.log("Database was created!");
+
+MongoClient.connect(process.env.MONGO_URI_LOCALHOST+"bingame", function(err, db) {
+  if (err) {
+    console.error(err)
+  }else{
+    console.log("Database created!");
+  }
+  db.close();
+});
+
+MongoClient.connect(process.env.MONGO_URI_LOCALHOST, function(err, db) {
+  if (err) throw err;
+  let dbo = db.db("bingame");
   dbo.createCollection("users", function(err, res) {
-    if (err) console.log("Collection already exists.");
-    console.log("Collection was created!");
-    db.close();
+    if (err) {
+      console.log("Collection already exists.");
+    }else{
+      console.log("Collection created!");
+    }
   });
   db.close();
 });

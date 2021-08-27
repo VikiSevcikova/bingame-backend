@@ -16,7 +16,7 @@ const basicAuthorization = basicAuth({
         // there is delay, so safeCompare is safer than ===
         // const emailMatches = basicAuth.safeCompare(email, result.email);  //we can skip this because we already looked for user with the given email
         const passwordMatches = basicAuth.safeCompare(password, result.password);
-        if (emailMatches && passwordMatches) return cb(null, true);
+        if (passwordMatches) return cb(null, true);
         else return cb(null, false);
       
       });
