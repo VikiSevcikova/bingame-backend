@@ -17,7 +17,10 @@ exports.getRandomNumber = (max) => {
 }
 
 exports.getResetPasswordToken = () => {
-    let resetToken = crypto.randomBytes(20).toString("hex");
+    return crypto.randomBytes(20).toString("hex");
+}
+
+exports.hashResetPasswordToken = (resetToken) => {
     //create hash object with sha256 algorithm, updates it with data in resetToken and return in hex form
     return crypto.createHash("sha256").update(resetToken).digest("hex");
 }

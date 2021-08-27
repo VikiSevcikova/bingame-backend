@@ -1,9 +1,10 @@
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const MongoClient = require("mongodb").MongoClient;
 const validateEmail = require("../utils/utils").validateEmail;
 const validatePassword = require("../utils/utils").validatePassword;
-const { getRandomNumber, getResetPasswordToken } = require("../utils/utils");
+const { getRandomNumber, getResetPasswordToken, hashResetPasswordToken } = require("../utils/utils");
 const sendMail = require("../utils/sendMail");
 
 exports.register = async (req, res, next) => {
@@ -17,13 +18,11 @@ exports.register = async (req, res, next) => {
   }
 
   if (!validatePassword(password)) {
-    res
-      .status(400)
-      .json({
-        success: false,
-        error:
-          "Password must have at least 3 digits. At least one lowercase. At least one uppercase.",
-      });
+    res.status(400).json({
+      success: false,
+      error:
+        "Password must have at least 3 digits. At least one lowercase. At least one uppercase.",
+    });
     return;
   }
 
@@ -35,7 +34,7 @@ exports.register = async (req, res, next) => {
         if (err) console.error(err);
         //connect to bingame db
         const dbo = db.db("bingame");
-        //encrypt the password before sage
+        //encrypt the password before save
         const salt = await bcrypt.genSalt(getRandomNumber(10));
         const cryptedPassword = await bcrypt.hash(password, salt);
 
@@ -46,32 +45,34 @@ exports.register = async (req, res, next) => {
         };
 
         //get users collection from DB and find user based on email
-        dbo.collection("users").findOne({email: email}, function (err, result) {
-          //if there error or no result it means that user was not found so new user can be created
-          if (!err && !result) {
-            //add new user do the collection
-            dbo.collection("users").insertOne(newUser, function (err, r) {
-              if (err) console.error(err);
-              console.log("1 user inserted");
-              //if there is no error then send token and also the data about the user
-              sendToken(
-                {
-                  _id: r.insertedId,
-                  username: username,
-                  email: email,
-                  password: cryptedPassword,
-                },
-                201,
-                res
-              );
+        dbo
+          .collection("users")
+          .findOne({ email: email }, function (err, result) {
+            //if there error or no result it means that user was not found so new user can be created
+            if (!err && !result) {
+              //add new user do the collection
+              dbo.collection("users").insertOne(newUser, function (err, r) {
+                if (err) console.error(err);
+                console.log("1 user inserted");
+                //if there is no error then send token and also the data about the user
+                sendToken(
+                  {
+                    _id: r.insertedId,
+                    username: username,
+                    email: email,
+                    password: cryptedPassword,
+                  },
+                  201,
+                  res
+                );
                 db.close();
-            });
-          } else {
-            res
-              .status(400)
-              .json({ success: false, error: "User already exists." });
-          }
-        });
+              });
+            } else {
+              res
+                .status(400)
+                .json({ success: false, error: "User already exists." });
+            }
+          });
       }
     );
   } catch (error) {
@@ -97,29 +98,34 @@ exports.login = async (req, res, next) => {
       const dbo = db.db("bingame");
 
       //check in the collection if the user is created
-      dbo.collection("users").findOne({email: email}, async function (err, result) {
-        if (err) console.error(err);
-        //if there is no result, result is null, return error
-        if (!result) {
-          res
-            .status(404)
-            .json({ success: false, error: "Invalid credentials." });
-          return;
-        }
+      dbo
+        .collection("users")
+        .findOne({ email: email }, async function (err, result) {
+          if (err) console.error(err);
+          //if there is no result, result is null, return error
+          if (!result) {
+            res
+              .status(404)
+              .json({ success: false, error: "Invalid credentials." });
+            return;
+          }
 
-        //compare if data in request body => from login page are the same as users based on email in db
-        //   const emailMatches = basicAuth.safeCompare(email, result.email); //we can skip this because we already looked for user with the given email
-        const passwordMatches = await bcrypt.compare(password, result.password);
-        if (!passwordMatches) {
-          res
-            .status(404)
-            .json({ success: false, error: "Invalid credentials." });
-          return;
-        }
-        //send token and the user's data
-        sendToken(result, 200, res);
-        db.close();
-      });
+          //compare if data in request body => from login page are the same as users based on email in db
+          //   const emailMatches = basicAuth.safeCompare(email, result.email); //we can skip this because we already looked for user with the given email
+          const passwordMatches = await bcrypt.compare(
+            password,
+            result.password
+          );
+          if (!passwordMatches) {
+            res
+              .status(404)
+              .json({ success: false, error: "Invalid credentials." });
+            return;
+          }
+          //send token and the user's data
+          sendToken(result, 200, res);
+          db.close();
+        });
     });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -127,45 +133,121 @@ exports.login = async (req, res, next) => {
 };
 
 exports.forgotpassword = async (req, res, next) => {
+  try {
+    //check if user password matches with the password from req.body
+    MongoClient.connect(process.env.MONGO_URI_LOCALHOST, function (err, db) {
+      if (err) console.error(err);
+      const dbo = db.db("bingame");
+      const { email } = req.body;
+      console.log(req.body);
+      //check in the collection if the user exists
+      dbo
+        .collection("users")
+        .findOne({ email: email }, function (err, result) {
+          if (err) {
+            res
+              .status(500)
+              .json({ success: false, error: err });
+          }
+          //if there is no result, result is null, return error
+          if (!result) {
+            res
+              .status(404)
+              .json({ success: false, error: "Email doesn't exist." });
+            return;
+          } else {
+            //create reset token and add it to the user
+            //resetPasswordExpires - 10minutes
+            const resetToken = getResetPasswordToken();
+            const resetTokenAndExpire = {
+              $set: {
+                resetPasswordToken: hashResetPasswordToken(resetToken),
+                resetPasswordExpire: Date.now() + 10 * (60 * 1000),
+              },
+            };
+            console.log(req.body);
+            dbo
+              .collection("users")
+              .updateOne({ email: email }, resetTokenAndExpire, function (err, result) {
+                if (err) console.error(err);
+                console.log("1 user updated");
+                sendResetMail(email, resetToken, res);
+                db.close();
+              });
+          }
+        });
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
 
-    try {
-        //check if user password matches with the password from req.body
-        MongoClient.connect(process.env.MONGO_URI_LOCALHOST, function (err, db) {
-          if (err) console.error(err);
-          const dbo = db.db("bingame");
-          const {email} = req.body;
-          console.log(req.body)
-          //check in the collection if the user is created
-          dbo.collection("users").findOne({email: email}, async function (err, result) {
+exports.resetpassword = async (req, res, next) => {
+  //recreate the hash for reset token
+  const resetPasswordToken = hashResetPasswordToken(req.params.resetToken);
+  const {newPassword} = req.body;
+
+  if (!validatePassword(newPassword)) {
+    res.status(400).json({
+      success: false,
+      error:
+        "Password must have at least 3 digits. At least one lowercase. At least one uppercase.",
+    });
+    return;
+  }
+
+  try {
+    //connect to db and search for user with this token
+    MongoClient.connect(process.env.MONGO_URI_LOCALHOST, function (err, db) {
+      if (err) console.error(err);
+      const dbo = db.db("bingame");
+      //find the user with reset token from the url, and valid expire date
+      dbo
+        .collection("users")
+        .findOne(
+          {
+            resetPasswordToken: resetPasswordToken,
+            resetPasswordExpire: { $gt: Date.now() },
+          },
+          async function (err, result) {
             if (err) {
-                console.error(err);
+              console.error(err);
             }
-            //if there is no result, result is null, return error
             if (!result) {
               res
-                .status(404)
-                .json({ success: false, error: "Email doesn't exist." });
+                .status(400)
+                .json({ success: false, error: "Invalid reset token." });
               return;
-            }else{
-                //create reset token and add it to the user
-                //resetPasswordExpires - 10minutes
-                const resetToken = {$set: { resetPasswordToken: getResetPasswordToken(), resetPasswordExpire: Date.now() + 10 * (60 * 1000)}};
-                console.log(req.body)
-                dbo.collection("users").updateOne({email: email}, resetToken, function(err, res) {
-                    if (err) console.error(err);
-                    console.log("1 user updated");
-                    sendResetMail(email,resetToken);
-                    db.close();
-                });
+            } else {
+              //encrypt the password before save
+              const salt = await bcrypt.genSalt(getRandomNumber(10));
+              const cryptedPassword = await bcrypt.hash(newPassword, salt);
+              
+              //change the password and set token to undefined, also the expire date
+              const resetTokenAndExpire = {
+                $set: {
+                  password: cryptedPassword,
+                  resetPasswordToken: undefined,
+                  resetPasswordExpire: undefined,
+                },
+              };
+              dbo
+              .collection("users")
+              .updateOne({resetPasswordToken: result.resetPasswordToken}, resetTokenAndExpire, function (err, r) {
+                if (err) console.error(err);
+                res.status(200).json({ success: true, data: "Password was changed." });
+                db.close();
+              });
+              
             }
-            db.close();
-          });
-        });
-      } catch (error) {
-        res.status(500).json({ success: false, error: error.message });
-      }
-    
-}
+          }
+        );
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 const sendToken = (result, statusCode, res) => {
   let token = jwt.sign({ id: result._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE,
@@ -178,19 +260,19 @@ const sendToken = (result, statusCode, res) => {
   res.status(statusCode).json({ success: true, token, user });
 };
 
-const sendResetMail = async (email, resetToken) => {
-    const resetUrl = `http://localhost:3000/passwordreset/${resetToken}`
-    //clicktracking off to avoid weird looking link
-    const message = `
+const sendResetMail = async (email, resetToken, res) => {
+  const resetUrl = `http://localhost:3000/resetpassword/${resetToken}`;
+  //clicktracking off to avoid weird looking link
+  const message = `
         <h1>You have requested to reset your password</h1>
         <p>Please go to this link to reset your password:</p>
         <a href=${resetUrl} clicktracking=off>${resetUrl}</a>
-    `
-    
-    try{
-        await sendMail(email, 'BinGame - Reset password', message)
-        res.status(200).json({ success: true, data: "Email sent." });
-    }catch(err){
-        res.status(500).json({ success: false, error: "Email could not be sent." });
-    }
-}
+    `;
+
+  try {
+    await sendMail(email, "BinGame - Reset password", message);
+    res.status(200).json({ success: true, data: "Email sent." });
+  } catch (err) {
+    res.status(500).json({ success: false, error: "Email could not be sent." });
+  }
+};
